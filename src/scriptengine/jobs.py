@@ -137,7 +137,11 @@ class Job:
 
     def _run_iteration(self, context, items):
         for t in self.todo:
-            t.run(Context({**context, **items}))
+            c = t.run(Context({**context, **items}))
+            if c:
+                self.log_warning(
+                    f"Context update from {t.shortid} discarded in parallel loop"
+                )
 
     def run(self, context):
         if self.when(context):

@@ -1,106 +1,73 @@
 #!/usr/bin/env bash
-# ScriptEngine parallel loop benchmark
-# Tests base.copy with and without --parallel flag.
-#
-# Usage:
-#   bash run-bench.sh <inidata_dir> [N]
-#
-# The script picks large .nc files from inidata_dir, copies them locally,
-# then benchmarks parallel vs sequential execution of base.copy loops.
-
+# Benchmark: se --parallel-io vs se (sequential)
+# Usage: bash run-bench.sh <dir_with_nc_files> [iterations]
+# Set BENCH_WORKDIR if /tmp is too small.
 set -uo pipefail
 
-INIDATA_DIR=${1:?'Usage: run-bench.sh <inidata_dir> [N]'}
-N=${2:-10}
+SRCDIR=${1:?'Usage: run-bench.sh <dir_with_nc_files> [iterations]'}
+N=${2:-5}
+DIR=$(cd "$(dirname "$0")" && pwd)
+W=${BENCH_WORKDIR:-${TMPDIR:-/tmp}/se-bench-$$}
 
-SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-WORKDIR=${BENCH_WORKDIR:-${TMPDIR:-/tmp}/se-bench-$$}
-SRCDIR=$WORKDIR/src
+command -v se >/dev/null || { echo "ERROR: se not in PATH" >&2; exit 1; }
 
-if ! command -v se >/dev/null 2>&1; then
-    echo "ERROR: 'se' not found in PATH" >&2
-    exit 1
-fi
+# Pick 10 largest .nc files
+mapfile -t FILES < <(find "$SRCDIR" -maxdepth 1 -name '*.nc' -size +1M -printf '%s %f\n' | sort -rn | head -10 | awk '{print $2}')
+(( ${#FILES[@]} >= 5 )) || { echo "ERROR: need >=5 .nc files >1MB" >&2; exit 1; }
 
-mapfile -t FILES < <(find "$INIDATA_DIR" -maxdepth 1 -name '*.nc' -size +1M -exec basename {} \; | sort)
+YAML_LIST=$(printf ", '%s'" "${FILES[@]}"); YAML_LIST="[${YAML_LIST:2}]"
 
-if [ ${#FILES[@]} -lt 5 ]; then
-    echo "ERROR: Need at least 5 large .nc files in $INIDATA_DIR, found ${#FILES[@]}" >&2
-    exit 1
-fi
+mkdir -p "$W/src"
+for f in "${FILES[@]}"; do [ -f "$W/src/$f" ] || cp "$SRCDIR/$f" "$W/src/"; done
 
-FILES_YAML=$(printf ", '%s'" "${FILES[@]}")
-FILES_YAML="[${FILES_YAML:2}]"
-
-TOTAL_SIZE=$(find "$INIDATA_DIR" -maxdepth 1 -name '*.nc' -size +1M -exec du -cm {} + | tail -1 | cut -f1)
-
-echo "ScriptEngine --parallel benchmark"
-echo "=================================="
-echo "  source:  $INIDATA_DIR"
-echo "  files:   ${#FILES[@]} files (~${TOTAL_SIZE}MB total)"
-echo "  runs:    $N iterations"
-echo ""
-
-echo "Preparing source files..."
-mkdir -p "$SRCDIR"
-for f in "${FILES[@]}"; do
-    if [ ! -f "$SRCDIR/$f" ]; then
-        cp "$INIDATA_DIR/$f" "$SRCDIR/"
-    fi
-done
-echo "  done ($SRCDIR)"
-echo ""
-
-CONTEXT_YML=$WORKDIR/context.yml
-cat > "$CONTEXT_YML" << EOF
+cat > "$W/ctx.yml" <<EOF
 - base.context:
-    files: $FILES_YAML
-    srcdir: "$SRCDIR"
-    workdir: "$WORKDIR/run"
+    files: $YAML_LIST
+    srcdir: "$W/src"
+    workdir: "$W/run"
 EOF
 
-run_se() {
-    local flag=$1 yml=$2
-    rm -rf "$WORKDIR/run"
-    TIMEFORMAT='%R'
-    { time se --loglevel error $flag "$CONTEXT_YML" "$yml" ; } 2>&1 | tail -1
+echo "se --parallel-io benchmark: ${#FILES[@]} files, $N iterations"
+echo ""
+
+TIMEFORMAT='%R'
+
+time_copy() {
+    rm -rf "$W/run"
+    { time se --loglevel error $1 "$W/ctx.yml" "$DIR/bench-copy.yml" ; } 2>&1 | tail -1
 }
 
-YML="$SCRIPT_DIR/bench-copy.yml"
+time_move() {
+    rm -rf "$W/run"
+    se --loglevel error "$W/ctx.yml" "$DIR/bench-move-setup.yml" >/dev/null 2>&1
+    { time se --loglevel error $1 "$W/ctx.yml" "$DIR/bench-move.yml" ; } 2>&1 | tail -1
+}
 
-# Warmup (prime filesystem caches)
-run_se "" "$YML" > /dev/null 2>&1 || true
-run_se "--parallel" "$YML" > /dev/null 2>&1 || true
+median() { printf '%s\n' "$@" | sort -n | awk -v n=$# 'NR==int(n/2)+1{print}'; }
 
-echo "Running benchmark..."
+for op in copy move; do
+    par=() seq=()
+    fn="time_$op"
 
-P_TIMES=()
-S_TIMES=()
-for ((i=1; i<=N; i++)); do
-    if (( i % 2 == 1 )); then
-        P_TIMES+=("$(run_se "--parallel" "$YML")")
-        S_TIMES+=("$(run_se "" "$YML")")
-    else
-        S_TIMES+=("$(run_se "" "$YML")")
-        P_TIMES+=("$(run_se "--parallel" "$YML")")
-    fi
+    $fn "" >/dev/null 2>&1 || true
+    $fn "--parallel-io" >/dev/null 2>&1 || true
+
+    for ((i=1; i<=N; i++)); do
+        if (( i%2 )); then
+            par+=("$($fn "--parallel-io")")
+            seq+=("$($fn "")")
+        else
+            seq+=("$($fn "")")
+            par+=("$($fn "--parallel-io")")
+        fi
+    done
+
+    mp=$(median "${par[@]}"); ms=$(median "${seq[@]}")
+    sp=$(awk "BEGIN{printf \"%.0f\", ($ms-$mp)/$ms*100}")
+    printf "  %-10s  par=%ss  seq=%ss  speedup=%s%%\n" "base.$op" "$mp" "$ms" "$sp"
+    printf "             all par: %s\n" "${par[*]}"
+    printf "             all seq: %s\n" "${seq[*]}"
 done
 
-MEDIAN_P=$(printf '%s\n' "${P_TIMES[@]}" | sort -n | awk -v n="$N" 'NR==int(n/2)+1{print}')
-MEDIAN_S=$(printf '%s\n' "${S_TIMES[@]}" | sort -n | awk -v n="$N" 'NR==int(n/2)+1{print}')
-SPEEDUP=$(awk "BEGIN{if($MEDIAN_S>0) printf \"%.0f\", ($MEDIAN_S-$MEDIAN_P)/$MEDIAN_S*100; else print 0}")
-
 echo ""
-echo "┌────────────┬──────────┬────────────┬─────────┐"
-echo "│ Operation  │ Parallel │ Sequential │ Speedup │"
-echo "├────────────┼──────────┼────────────┼─────────┤"
-printf "│ %-10s │ %6ss │ %8ss │ %5s%% │\n" "base.copy" "$MEDIAN_P" "$MEDIAN_S" "$SPEEDUP"
-echo "└────────────┴──────────┴────────────┴─────────┘"
-echo ""
-echo "All runs (seconds):"
-echo "  parallel:   ${P_TIMES[*]}"
-echo "  sequential: ${S_TIMES[*]}"
-echo ""
-
-rm -rf "$WORKDIR"
-echo "Done."
+rm -rf "$W"

@@ -66,8 +66,8 @@ def parse_cmd_line_args():
         "--nocolor", help="do not use colored terminal output", action="store_true"
     )
     arg_parser.add_argument(
-        "--parallel",
-        help="run loop iterations concurrently using threads",
+        "--parallel-io",
+        help="run loop iterations concurrently using threads (for I/O-bound tasks)",
         action="store_true",
     )
     arg_parser.add_argument("files", help="YAML file(s) to read", nargs="+")
@@ -151,7 +151,7 @@ def main():
             "cli": {
                 "cwd": os.getcwd(),
                 "script_path": script_path,
-                "parallel": parsed_args.parallel,
+                "parallel": parsed_args.parallel_io,
             },
             "tasks": {
                 "timing": {
