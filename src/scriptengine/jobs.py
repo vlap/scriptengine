@@ -6,6 +6,7 @@ be given to a ScriptEngine, for execution.
 """
 
 import ast
+import concurrent.futures
 import copy
 import logging
 import uuid
@@ -42,17 +43,19 @@ def _todo_list(todo):
 
 
 class Job:
-    def __init__(self, todo=None, *, when=None, loop=None, loop_vars=None):
+    def __init__(self, todo=None, *, when=None, loop=None, loop_vars=None, parallel=False):
         self._identifier = uuid.uuid4()
         self.todo = todo or []
         self._when = when
         self._loop = loop
         self._loop_vars = loop_vars
+        self._parallel = parallel
         self.log_debug(
             "New Job:"
             f"{' when '+self._when if self._when else ''}"
             f"{' with '+str(self._loop_vars) if self._loop else ''}"
             f"{' in '+str(self._loop) if self._loop else ''}"
+            f"{' parallel' if self._parallel else ''}"
             f" {tuple(t.shortid for t in self._todo)}"
         )
 
@@ -134,21 +137,42 @@ class Job:
         self._todo.extend(todo_list)
         self.log_debug(f'Append: {",".join(t.shortid for t in todo_list)}')
 
+    def _run_iteration(self, local_context, items):
+        for t in self.todo:
+            c = t.run(Context({**local_context, **items}))
+            if c:
+                return c
+        return None
+
     def run(self, context):
         if self.when(context):
             local_context = Context(copy.deepcopy(context))
             context_update = Context()
-            for items in self.loop(local_context):
-                if set(items) & set(local_context):
-                    self.log_warning(
-                        "The following loop variables collide with the "
-                        f"context: {set(items) & set(local_context)}"
-                    )
-                for t in self.todo:
-                    c = t.run(Context({**local_context, **items}))
+
+            if self._parallel and self._loop:
+                all_items = list(self.loop(local_context))
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    futures = [
+                        pool.submit(self._run_iteration, local_context, items)
+                        for items in all_items
+                    ]
+                    for f in concurrent.futures.as_completed(futures):
+                        c = f.result()
+                        if c:
+                            local_context += c
+                            context_update += c
+            else:
+                for items in self.loop(local_context):
+                    if set(items) & set(local_context):
+                        self.log_warning(
+                            "The following loop variables collide with the "
+                            f"context: {set(items) & set(local_context)}"
+                        )
+                    c = self._run_iteration(local_context, items)
                     if c:
                         local_context += c
                         context_update += c
+
             return context_update or None
 
     def _log(self, level, msg):

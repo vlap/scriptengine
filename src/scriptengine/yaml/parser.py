@@ -57,6 +57,7 @@ def parse(data):
         sentinel = object()
 
         when_clause = spec.get("when")
+        parallel = spec.get("parallel", False)
         loop_descriptor = spec.get("loop", sentinel)
 
         loop_opts = {}
@@ -79,7 +80,7 @@ def parse(data):
             else:
                 log.error(f"Invalid loop descriptor: {loop_descriptor}")
                 raise ScriptEngineParseYAMLError
-        return Job(todo, when=when_clause, **loop_opts)
+        return Job(todo, when=when_clause, parallel=parallel, **loop_opts)
 
     if not data:
         return []
