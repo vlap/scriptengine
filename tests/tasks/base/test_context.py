@@ -212,3 +212,139 @@ def test_context_load_file_not_dict(tmp_path):
     )
     with pytest.raises(ScriptEngineTaskRunError):
         t.run(SEContext())
+
+
+def test_context_dump_file(tmp_path):
+    f = tmp_path / "f.yml"
+    t1 = from_yaml(
+        """
+        base.context:
+            foo: 1
+            bar: 2
+        """
+    )
+    t2 = from_yaml(
+        f"""
+        base.context.dump:
+            file: {f}
+        """
+    )
+    ctx = SEContext()
+    ctx += t1.run(ctx)
+    t2.run(ctx)
+    assert f.exists()
+    assert yaml.load(f.read_text(), Loader=yaml.SafeLoader) == {"foo": 1, "bar": 2}
+
+
+def test_context_dump_keys(tmp_path):
+    f = tmp_path / "f.yml"
+    t1 = from_yaml(
+        """
+        base.context:
+            foo: 1
+            bar: 2
+            baz: 3
+        """
+    )
+    t2 = from_yaml(
+        f"""
+        base.context.dump:
+            file: {f}
+            keys:
+                - foo
+                - bar
+        """
+    )
+    ctx = SEContext()
+    ctx += t1.run(ctx)
+    t2.run(ctx)
+    assert f.exists()
+    assert yaml.load(f.read_text(), Loader=yaml.SafeLoader) == {"foo": 1, "bar": 2}
+
+
+def test_context_dump_root_and_load(tmp_path):
+    f = tmp_path / "f.yml"
+    t1 = from_yaml(
+        """
+        base.context:
+            foo: 1
+            bar: 2
+        """
+    )
+    t2 = from_yaml(
+        f"""
+        base.context.dump:
+            file: {f}
+            root: ic_meta
+            keys:
+                - foo
+        """
+    )
+    t3 = from_yaml(
+        f"""
+        base.context.load:
+            file: {f}
+        """
+    )
+    ctx = SEContext()
+    ctx += t1.run(ctx)
+    t2.run(ctx)
+    new_ctx = SEContext({"foo": 99})
+    new_ctx += t3.run(new_ctx)
+    assert new_ctx["foo"] == 99
+    assert new_ctx["ic_meta"] == {"foo": 1}
+
+
+def test_context_dump_load_roundtrip(tmp_path):
+    f = tmp_path / "f.yml"
+    t1 = from_yaml(
+        """
+        base.context:
+            foo: 1
+            bar: 2
+        """
+    )
+    t2 = from_yaml(
+        f"""
+        base.context.dump:
+            file: {f}
+        """
+    )
+    t3 = from_yaml(
+        f"""
+        base.context.load:
+            file: {f}
+        """
+    )
+    ctx = SEContext()
+    ctx += t1.run(ctx)
+    t2.run(ctx)
+    new_ctx = SEContext()
+    new_ctx += t3.run(new_ctx)
+    assert new_ctx["foo"] == 1
+    assert new_ctx["bar"] == 2
+
+
+def test_context_dump_no_args():
+    t = from_yaml(
+        """
+        base.context.dump:
+        """
+    )
+    with pytest.raises(ScriptEngineTaskError):
+        t.run(SEContext())
+
+
+def test_context_dump_keys_not_a_list(tmp_path):
+    f = tmp_path / "f.yml"
+    t = from_yaml(
+        f"""
+        base.context.dump:
+            file: {f}
+            keys: not_a_list
+        """
+    )
+    with pytest.raises(ScriptEngineTaskRunError):
+        t.run(SEContext())
+
+

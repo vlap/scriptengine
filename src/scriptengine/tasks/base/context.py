@@ -93,3 +93,51 @@ class ContextLoad(Task):
             raise ScriptEngineTaskError
 
         return SEContext(context_update_d)
+
+
+class ContextDump(Task):
+    """
+    This task dumps the context, or a subset of context keys, to a YAML file.
+
+    Examples:
+    - base.context.dump:
+        file: saveic/experiment-config.yml
+        root: "ic_meta"
+        keys:
+          - experiment
+          - model_config
+
+    - base.context.dump:
+        file: all_context.yml
+    """
+
+    _required_arguments = ("file",)
+
+    @timed_runner
+    def run(self, context):
+        file_arg = self.getarg("file", context)
+        keys_arg = self.getarg("keys", context, default=None)
+        root_arg = self.getarg("root", context, default=None)
+
+        self.log_info(f"Dump context to file: {file_arg}")
+
+        if keys_arg is not None:
+            if not isinstance(keys_arg, list):
+                self.log_error(
+                    f"The 'keys' argument must be a list (was a '{type(keys_arg).__name__}')"
+                )
+                raise ScriptEngineTaskRunError
+            data = {k: context[k] for k in keys_arg if k in context}
+        else:
+            # Dump full context excluding internal 'se' namespace
+            data = {k: v for k, v in context.items() if k != "se"}
+
+        if root_arg is not None:
+            data = {str(root_arg): data}
+
+        try:
+            with open(file_arg, "w") as f:
+                yaml.dump(data, f, sort_keys=False)
+        except (FileNotFoundError, PermissionError, IsADirectoryError, OSError) as e:
+            self.log_error(e)
+            raise ScriptEngineTaskRunError

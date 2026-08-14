@@ -37,6 +37,9 @@ def string_class_constructor(derived_string_class):
 yaml.add_constructor("!noparse", string_class_constructor(NoParseString))
 yaml.add_constructor("!noparse_yaml", string_class_constructor(NoParseYamlString))
 yaml.add_constructor("!noparse_jinja", string_class_constructor(NoParseJinjaString))
+yaml.add_constructor("!noparse", string_class_constructor(NoParseString), Loader=yaml.SafeLoader)
+yaml.add_constructor("!noparse_yaml", string_class_constructor(NoParseYamlString), Loader=yaml.SafeLoader)
+yaml.add_constructor("!noparse_jinja", string_class_constructor(NoParseJinjaString), Loader=yaml.SafeLoader)
 
 
 def rrule_constructor(loader, node):
@@ -47,6 +50,20 @@ def rrule_constructor(loader, node):
 
 
 yaml.add_constructor("!rrule", rrule_constructor)
+yaml.add_constructor("!rrule", rrule_constructor, Loader=yaml.SafeLoader)
+
+
+def string_class_representer(tag):
+    return lambda dumper, node: dumper.represent_scalar(tag, str(node))
+
+
+yaml.add_representer(NoParseString, string_class_representer("!noparse"))
+yaml.add_representer(NoParseYamlString, string_class_representer("!noparse_yaml"))
+yaml.add_representer(NoParseJinjaString, string_class_representer("!noparse_jinja"))
+yaml.add_representer(
+    dateutil.rrule.rrule,
+    lambda dumper, node: dumper.represent_scalar("!rrule", str(node), style="|"),
+)
 
 
 def parse(data):
