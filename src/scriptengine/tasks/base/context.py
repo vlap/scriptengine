@@ -70,7 +70,7 @@ class ContextLoad(Task):
         elif file_arg:
             self.log_info(f"Load context update from file: {file_arg}")
             try:
-                with open(file_arg) as f:
+                with open(str(file_arg)) as f:
                     dict_from_file = yaml.load(f, Loader=yaml.SafeLoader)
             except (FileNotFoundError, PermissionError, IsADirectoryError) as e:
                 self.log_error(e)
@@ -136,7 +136,7 @@ class ContextDump(Task):
             data = {str(root_arg): data}
 
         try:
-            with open(file_arg, "w") as f:
+            with open(str(file_arg), "w") as f:
                 yaml.dump(data, f, sort_keys=False)
         except (FileNotFoundError, PermissionError, IsADirectoryError, OSError) as e:
             self.log_error(e)
