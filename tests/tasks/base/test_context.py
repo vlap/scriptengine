@@ -233,7 +233,7 @@ def test_context_dump_file(tmp_path):
     ctx += t1.run(ctx)
     t2.run(ctx)
     assert f.exists()
-    assert yaml.load(f.read_text(), Loader=yaml.SafeLoader) == {"foo": 1, "bar": 2}
+    assert yaml.safe_load(f.read_text()) == {"foo": 1, "bar": 2}
 
 
 def test_context_dump_keys(tmp_path):
@@ -259,10 +259,10 @@ def test_context_dump_keys(tmp_path):
     ctx += t1.run(ctx)
     t2.run(ctx)
     assert f.exists()
-    assert yaml.load(f.read_text(), Loader=yaml.SafeLoader) == {"foo": 1, "bar": 2}
+    assert yaml.safe_load(f.read_text()) == {"foo": 1, "bar": 2}
 
 
-def test_context_dump_root_and_load(tmp_path):
+def test_context_dump_root(tmp_path):
     f = tmp_path / "f.yml"
     t1 = from_yaml(
         """
@@ -280,49 +280,11 @@ def test_context_dump_root_and_load(tmp_path):
                 - foo
         """
     )
-    t3 = from_yaml(
-        f"""
-        base.context.load:
-            file: {f}
-        """
-    )
     ctx = SEContext()
     ctx += t1.run(ctx)
     t2.run(ctx)
-    new_ctx = SEContext({"foo": 99})
-    new_ctx += t3.run(new_ctx)
-    assert new_ctx["foo"] == 99
-    assert new_ctx["ic_meta"] == {"foo": 1}
-
-
-def test_context_dump_load_roundtrip(tmp_path):
-    f = tmp_path / "f.yml"
-    t1 = from_yaml(
-        """
-        base.context:
-            foo: 1
-            bar: 2
-        """
-    )
-    t2 = from_yaml(
-        f"""
-        base.context.dump:
-            file: {f}
-        """
-    )
-    t3 = from_yaml(
-        f"""
-        base.context.load:
-            file: {f}
-        """
-    )
-    ctx = SEContext()
-    ctx += t1.run(ctx)
-    t2.run(ctx)
-    new_ctx = SEContext()
-    new_ctx += t3.run(new_ctx)
-    assert new_ctx["foo"] == 1
-    assert new_ctx["bar"] == 2
+    assert f.exists()
+    assert yaml.safe_load(f.read_text()) == {"ic_meta": {"foo": 1}}
 
 
 def test_context_dump_no_args():

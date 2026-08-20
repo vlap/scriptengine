@@ -164,24 +164,20 @@ possibly nested, dictionary (i.e. single values or lists are not allowed).
 
 ``base.context.dump``
 ^^^^^^^^^^^^^^^^^^^^^
-Dumps the ScriptEngine context, or a subset of context keys, to a YAML file::
+Dumps the current ScriptEngine context data, or a subset of context keys, to a YAML file::
 
     base.context.dump:
         file: <FILE_NAME>  # required
         keys: <LIST_OF_KEYS>  # optional
         root: <ROOT_KEY>  # optional
 
-This task serializes the current in-memory context data state (the evaluated variables and configuration)
-to a YAML file. It is designed to export data state rather than reproducing ScriptEngine scripts or task
-definitions:
+This task exports the evaluated runtime state of the context. Note that it dumps the context data
+dictionary, not the ScriptEngine script definitions or execution structure. Dynamic constructs
+(like ``base.include`` or task logic) and internal engine parameters (the ``se`` namespace) are not
+part of the output.
 
-* **State vs. scripts**: It captures the evaluated data values currently held in the context. Dynamic constructs such as ``base.include``, loops, conditionals, or task structures are not part of the context data and are not exported.
-* **Evaluated values**: Jinja expressions already resolved in the context are exported as their final evaluated values. Values marked with ``!noparse`` retain their YAML tags.
-* **Internal namespace**: The internal ``se`` namespace (containing engine-level execution paths, loop states, and runtime metadata) is automatically excluded from the dump.
-* **Custom tags**: ScriptEngine tags (such as ``!rrule`` and ``!noparse``) are preserved using custom YAML representers.
-
-By default (if ``keys`` is not specified), ``base.context.dump`` dumps the full ScriptEngine
-context (excluding the internal ``se`` namespace) to the given ``file``::
+By default (if ``keys`` is not specified), ``base.context.dump`` dumps the full context data to the
+given ``file``::
 
     - base.context.dump:
         file: all_context.yml
@@ -194,9 +190,7 @@ To dump only specific context keys, use the ``keys`` argument::
           - experiment
           - model_config
 
-The ``root`` argument wraps the dumped dictionary under a top-level root key. This is particularly
-useful when downstream scripts want to load the metadata into an isolated namespace (e.g. ``ic_meta``)
-using ``base.context.load`` without modifying the active root context::
+The ``root`` argument wraps the dumped dictionary under an optional top-level key::
 
     - base.context.dump:
         file: experiment-config.yml
@@ -204,12 +198,6 @@ using ``base.context.load`` without modifying the active root context::
         keys:
           - experiment
           - model_config
-
-The resulting YAML file can be inspected, used by external model tools and downstream workflows,
-or loaded back into the context in another script using ``base.context.load``::
-
-    - base.context.load:
-        file: experiment-config.yml
 
 .. versionadded:: 1.3
     Add ``base.context.dump`` task.
