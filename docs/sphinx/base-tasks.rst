@@ -168,7 +168,7 @@ Dumps the current ScriptEngine context data, or a subset of context keys, to a Y
 
     base.context.dump:
         file: <FILE_NAME>  # required
-        keys: <LIST_OF_KEYS>  # optional
+        keys: <KEY_OR_LIST_OF_KEYS>  # optional
         root: <ROOT_KEY>  # optional
 
 This task exports the evaluated runtime state of the context. Note that it dumps the context data

@@ -122,12 +122,13 @@ class ContextDump(Task):
         self.log_info(f"Dump context to file: {file_arg}")
 
         if keys_arg is not None:
-            if not isinstance(keys_arg, list):
+            keys_list = [keys_arg] if isinstance(keys_arg, str) else keys_arg
+            if not isinstance(keys_list, list):
                 self.log_error(
-                    f"The 'keys' argument must be a list (was a '{type(keys_arg).__name__}')"
+                    f"The 'keys' argument must be a string or list (was a '{type(keys_arg).__name__}')"
                 )
                 raise ScriptEngineTaskRunError
-            data = {k: context[k] for k in keys_arg if k in context}
+            data = {k: context[k] for k in keys_list if k in context}
         else:
             # Dump full context excluding internal 'se' namespace
             data = {k: v for k, v in context.items() if k != "se"}

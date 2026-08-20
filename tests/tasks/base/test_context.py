@@ -297,16 +297,41 @@ def test_context_dump_no_args():
         t.run(SEContext())
 
 
-def test_context_dump_keys_not_a_list(tmp_path):
+def test_context_dump_keys_string(tmp_path):
+    f = tmp_path / "f.yml"
+    t1 = from_yaml(
+        """
+        base.context:
+            foo: 1
+            bar: 2
+        """
+    )
+    t2 = from_yaml(
+        f"""
+        base.context.dump:
+            file: {f}
+            keys: foo
+        """
+    )
+    ctx = SEContext()
+    ctx += t1.run(ctx)
+    t2.run(ctx)
+    assert f.exists()
+    assert yaml.safe_load(f.read_text()) == {"foo": 1}
+
+
+def test_context_dump_keys_invalid_type(tmp_path):
     f = tmp_path / "f.yml"
     t = from_yaml(
         f"""
         base.context.dump:
             file: {f}
-            keys: not_a_list
+            keys:
+                a: 1
         """
     )
     with pytest.raises(ScriptEngineTaskRunError):
         t.run(SEContext())
+
 
 
