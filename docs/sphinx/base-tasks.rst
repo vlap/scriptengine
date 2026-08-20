@@ -171,8 +171,14 @@ Dumps the ScriptEngine context, or a subset of context keys, to a YAML file::
         keys: <LIST_OF_KEYS>  # optional
         root: <ROOT_KEY>  # optional
 
-This task is the direct counterpart to ``base.context.load``. It writes context data as pure YAML,
-making the resulting file directly readable by ``base.context.load`` in other scripts.
+This task serializes the current in-memory context data state (the evaluated variables and configuration)
+to a YAML file. It is designed to export data state rather than reproducing ScriptEngine scripts or task
+definitions:
+
+* **State vs. scripts**: It captures the evaluated data values currently held in the context. Dynamic constructs such as ``base.include``, loops, conditionals, or task structures are not part of the context data and are not exported.
+* **Evaluated values**: Jinja expressions already resolved in the context are exported as their final evaluated values. Values marked with ``!noparse`` retain their YAML tags.
+* **Internal namespace**: The internal ``se`` namespace (containing engine-level execution paths, loop states, and runtime metadata) is automatically excluded from the dump.
+* **Custom tags**: ScriptEngine tags (such as ``!rrule`` and ``!noparse``) are preserved using custom YAML representers.
 
 By default (if ``keys`` is not specified), ``base.context.dump`` dumps the full ScriptEngine
 context (excluding the internal ``se`` namespace) to the given ``file``::
@@ -190,7 +196,7 @@ To dump only specific context keys, use the ``keys`` argument::
 
 The ``root`` argument wraps the dumped dictionary under a top-level root key. This is particularly
 useful when downstream scripts want to load the metadata into an isolated namespace (e.g. ``ic_meta``)
-using standard ``base.context.load`` without modifying active root context::
+using ``base.context.load`` without modifying the active root context::
 
     - base.context.dump:
         file: experiment-config.yml
@@ -199,8 +205,8 @@ using standard ``base.context.load`` without modifying active root context::
           - experiment
           - model_config
 
-The resulting file ``experiment-config.yml`` can then be loaded back into the context in any
-downstream script using ``base.context.load``::
+The resulting YAML file can be inspected, used by external model tools and downstream workflows,
+or loaded back into the context in another script using ``base.context.load``::
 
     - base.context.load:
         file: experiment-config.yml

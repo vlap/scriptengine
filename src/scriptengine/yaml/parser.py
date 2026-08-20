@@ -37,9 +37,6 @@ def string_class_constructor(derived_string_class):
 yaml.add_constructor("!noparse", string_class_constructor(NoParseString))
 yaml.add_constructor("!noparse_yaml", string_class_constructor(NoParseYamlString))
 yaml.add_constructor("!noparse_jinja", string_class_constructor(NoParseJinjaString))
-yaml.add_constructor("!noparse", string_class_constructor(NoParseString), Loader=yaml.SafeLoader)
-yaml.add_constructor("!noparse_yaml", string_class_constructor(NoParseYamlString), Loader=yaml.SafeLoader)
-yaml.add_constructor("!noparse_jinja", string_class_constructor(NoParseJinjaString), Loader=yaml.SafeLoader)
 
 
 def rrule_constructor(loader, node):
@@ -50,7 +47,6 @@ def rrule_constructor(loader, node):
 
 
 yaml.add_constructor("!rrule", rrule_constructor)
-yaml.add_constructor("!rrule", rrule_constructor, Loader=yaml.SafeLoader)
 
 
 def string_class_representer(tag):
